@@ -208,6 +208,22 @@ def get_session_data(session_id: str) -> Result:
     return Result(code=200, message="获取会话数据成功", data=session_data)
 
 
+# 通过会话id删除会话
+@app.delete('/api/sessions/{session_id}')
+def delete_session(session_id: str) -> Result:
+    print(f"删除会话[session_id:{session_id}]")
+    # 1.获取会话数据文件路径
+    session_file_path = get_session_file_path(session_id)
+
+    # 2.判断文件是否存在
+    if not os.path.exists(session_file_path):
+        return Result(code=404, message="会话数据不存在", data=None)
+
+    # 3.删除会话数据
+    os.remove(session_file_path)
+    return Result(code=200, message="删除会话成功", data=None)
+
+
 if __name__ == '__main__':
     import uvicorn
 
