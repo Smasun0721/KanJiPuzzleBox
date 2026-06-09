@@ -51,7 +51,7 @@ def new_session() -> Result:
     # 2.创建会话文件并保存
     session_data = {
         "current_session": session_id,
-        "message": []
+        "messages": []
     }
     with open(f"sessions/{session_id}.json", "w", encoding="utf-8") as f:
         json.dump(session_data, f, ensure_ascii=False, indent=4)
@@ -147,7 +147,7 @@ def chat(request: ChatRequest) -> Result:
         session_data = json.load(f)
 
     # 2.构建大模型请求数据
-    request_data = [{"role": "system", "content": SYSTEM_PROMPT}, *session_data["message"],
+    request_data = [{"role": "system", "content": SYSTEM_PROMPT}, *session_data["messages"],
                     {"role": "user", "content": request.message}]
 
     # 3.向AI大模型发起请求
@@ -162,8 +162,8 @@ def chat(request: ChatRequest) -> Result:
     print(f"<-----AI回复:{ai_response}")
 
     # 5.更新会话列表数据
-    session_data["message"].append({"role": "user", "content": request.message})
-    session_data["message"].append({"role": "assistant", "content": ai_response})
+    session_data["messages"].append({"role": "user", "content": request.message})
+    session_data["messages"].append({"role": "assistant", "content": ai_response})
 
     # 6.保存会话数据
     with open(session_file_path, "w", encoding="utf-8") as f:
@@ -172,6 +172,40 @@ def chat(request: ChatRequest) -> Result:
 
     # 7.返回会话数据
     return Result(code=200, message="与AI交互成功", data=ai_response)
+
+
+# 加载会话列表
+@app.get('/api/sessions')
+def get_session_list() -> Result:
+    print("加载会话列表")
+    # 1.获取session目录下的文件列表
+    session_files = os.listdir("sessions")
+
+    # 2.通过文件名获取session_id
+    session_list = [file.split(".")[0] for file in session_files if file.endswith(".json")]
+    session_list.sort(reverse=True)
+
+    # 3.返回会话列表
+    return Result(code=200, message="获取会话列表成功", data=session_list)
+
+
+# 通过会话id加载会话数据
+@app.get('/api/sessions/{session_id}')
+def get_session_data(session_id: str) -> Result:
+    print(f"加载会话数据[session_id:{session_id}]")
+    # 1.获取会话数据文件路径
+    session_file_path = get_session_file_path(session_id)
+
+    # 2.判断文件是否存在
+    if not os.path.exists(session_file_path):
+        return Result(code=404, message="会话数据不存在", data=None)
+
+    # 3.加载会话数据
+    with open(session_file_path, "r", encoding="utf-8") as f:
+        session_data = json.load(f)
+
+    # 4.返回会话数据
+    return Result(code=200, message="获取会话数据成功", data=session_data)
 
 
 if __name__ == '__main__':
