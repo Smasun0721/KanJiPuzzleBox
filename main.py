@@ -2,11 +2,20 @@ import os
 from datetime import datetime
 import json
 from typing import Any
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from openai import OpenAI
 from pydantic import BaseModel
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
+import logging
+from loguru import logger as logging
+
+
+# # 配置日志
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+#     )
 
 # 创建FastAPI实例
 app = FastAPI(title="汉字迷盒")
@@ -44,7 +53,7 @@ def get_session_id():
 # 新建会话
 @app.post('/api/sessions')
 def new_session() -> Result:
-    print("创建会话")
+    logging.info("创建会话")
     # 1.生成会话标识
     session_id = get_session_id()
 
@@ -140,7 +149,7 @@ client = OpenAI(api_key=os.environ.get('DEEPSEEK_API_KEY'), base_url="https://ap
 # 与AI交互
 @app.post('/api/chat')
 def chat(request: ChatRequest) -> Result:
-    print(f"与AI交互[session_id:{request.session_id}]\n----->用户输入:{request.message}")
+    logging.info(f"----->用户输入:{request.message}")
     # 1.加载文件中的会话数据
     session_file_path = get_session_file_path(request.session_id)
     with open(session_file_path, "r", encoding="utf-8") as f:
@@ -159,7 +168,7 @@ def chat(request: ChatRequest) -> Result:
 
     # 4.获取大模型响应数据
     ai_response = response.choices[0].message.content
-    print(f"<-----AI回复:{ai_response}")
+    logging.info(f"<-----AI回复:{ai_response}")
 
     # 5.更新会话列表数据
     session_data["messages"].append({"role": "user", "content": request.message})
@@ -168,7 +177,7 @@ def chat(request: ChatRequest) -> Result:
     # 6.保存会话数据
     with open(session_file_path, "w", encoding="utf-8") as f:
         json.dump(session_data, f, ensure_ascii=False, indent=4)
-        print(f"保存会话数据成功:{session_file_path}")
+        logging.info(f"保存会话数据成功:{session_file_path}")
 
     # 7.返回会话数据
     return Result(code=200, message="与AI交互成功", data=ai_response)
@@ -177,7 +186,7 @@ def chat(request: ChatRequest) -> Result:
 # 加载会话列表
 @app.get('/api/sessions')
 def get_session_list() -> Result:
-    print("加载会话列表")
+    logging.info("加载会话列表")
     # 1.获取session目录下的文件列表
     session_files = os.listdir("sessions")
 
@@ -192,7 +201,7 @@ def get_session_list() -> Result:
 # 通过会话id加载会话数据
 @app.get('/api/sessions/{session_id}')
 def get_session_data(session_id: str) -> Result:
-    print(f"加载会话数据[session_id:{session_id}]")
+    logging.info(f"加载会话数据[session_id:{session_id}]")
     # 1.获取会话数据文件路径
     session_file_path = get_session_file_path(session_id)
 
@@ -211,7 +220,7 @@ def get_session_data(session_id: str) -> Result:
 # 通过会话id删除会话
 @app.delete('/api/sessions/{session_id}')
 def delete_session(session_id: str) -> Result:
-    print(f"删除会话[session_id:{session_id}]")
+    logging.info(f"删除会话[session_id:{session_id}]")
     # 1.获取会话数据文件路径
     session_file_path = get_session_file_path(session_id)
 
@@ -222,6 +231,15 @@ def delete_session(session_id: str) -> Result:
     # 3.删除会话数据
     os.remove(session_file_path)
     return Result(code=200, message="删除会话成功", data=None)
+
+# 定义异常处理器
+@app.exception_handler(Exception)
+async def handle_exception(request: Request, exc: Exception):
+    logging.error(f"请求路径:{request.url}，异常:{exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"code": 500, "message": "服务器内部错误", "data": None}
+    )
 
 
 if __name__ == '__main__':
